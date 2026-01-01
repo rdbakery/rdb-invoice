@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Royal Delight Bakery Invoice</title>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+<style>
+*{box-sizing:border-box;}
+
+body{
+  font-family: monospace;
+  background:#eaeaea;
+  margin:0;
+  padding:10px;
+}
+
+.wrapper{
+  display:flex;
+  justify-content:center;
+}
+
+.container{
+  width:100%;
+  max-width:320px;
+  background:#fff;
+  padding:10px;
+}
+
+.center{text-align:center;}
+.right{text-align:right;}
+.bold{font-weight:bold;}
+
+hr{
+  border:none;
+  border-top:1px dashed #000;
+  margin:6px 0;
+}
+
+/* POS table */
+.pos-table{
+  width:100%;
+  font-size:12px;
+}
+
+.pos-header{
+  border-bottom:1px solid #000;
+  font-weight:bold;
+}
+
+.col-item{width:42%;}
+.col-qty{width:10%; text-align:center;}
+.col-rate{width:16%; text-align:right;}
+.col-disc{width:14%; text-align:right;}
+.col-amt{width:18%; text-align:right;}
+
+input,select,button{
+  width:100%;
+  font-family:monospace;
+  font-size:12px;
+  padding:4px;
+}
+
+button{
+  margin-top:6px;
+}
+
+.no-print{display:block;}
+
+@media (max-width:480px){
+  .container{max-width:100%;}
+}
+</style>
+</head>
+
+<body>
+
+<div class="wrapper">
+<div class="container" id="invoice">
+
+<!-- HEADER -->
+<div class="center bold">
+ROYAL DELIGHT BAKERY<br>
+Cartful of Happiness
+</div>
+
+<div class="center">
+Vikram Mod, Naubatpur<br>
+Patna – 801109<br>
+FSSAI: 20425004000384
+</div>
+
+<hr>
+
+<!-- BILLING INFO -->
+<div class="no-print">
+Invoice No:
+<input id="invoiceNoInput">
+</div>
+
+Invoice No: <span id="invoiceNo"></span><br>
+Date & Time: <span id="printDate"></span><br>
+Customer Mobile: <span id="custMobilePrint">-</span>
+
+<hr>
+
+<!-- INPUT CONTROLS -->
+<div class="no-print">
+Customer Mobile:
+<input id="custMobile" maxlength="10" placeholder="10 digit mobile"><br><br>
+
+Invoice Date & Time:
+<input type="datetime-local" id="invoiceDate"><br><br>
+
+GST Type:
+<select id="gstType">
+  <option value="nogst" selected>Non-GST Invoice</option>
+  <option value="gst">GST Invoice</option>
+</select>
+</div>
+
+<hr class="no-print">
+
+<table class="no-print">
+<tr>
+<th>Item</th><th>Qty</th><th>Rate</th><th>Disc%</th>
+</tr>
+<tr>
+<td><input id="item"></td>
+<td><input id="qty" value="1"></td>
+<td><input id="rate"></td>
+<td><input id="disc" value="0"></td>
+</tr>
+</table>
+
+<button class="no-print" onclick="addItem()">Add Item</button>
+
+<hr>
+
+<!-- PRINT TABLE -->
+<table class="pos-table">
+<tr class="pos-header">
+<td class="col-item">Item</td>
+<td class="col-qty">Qty</td>
+<td class="col-rate">Rate</td>
+<td class="col-disc">Disc%</td>
+<td class="col-amt">Amt</td>
+</tr>
+<tbody id="itemTable"></tbody>
+</table>
+
+<hr>
+
+<table class="pos-table">
+<tr><td>Subtotal</td><td class="right">₹ <span id="subTotal">0.00</span></td></tr>
+<tr id="cgstRow"><td>CGST 2.5%</td><td class="right">₹ <span id="cgst">0.00</span></td></tr>
+<tr id="sgstRow"><td>SGST 2.5%</td><td class="right">₹ <span id="sgst">0.00</span></td></tr>
+<tr class="bold">
+<td>GRAND TOTAL</td><td class="right">₹ <span id="grandTotal">0.00</span></td>
+</tr>
+</table>
+
+<hr>
+
+Payment Mode: <b><span id="paymentPrint">Cash</span></b>
+
+<hr>
+
+<!-- FOOTER -->
+<div class="center bold">
+🎂 Thank you for choosing Royal Delight Bakery! 🍕<br>
+Visit again for delicious Cakes, Pastries & Pizzas ❤️
+</div>
+
+</div>
+</div>
+
+<!-- CONTROLS -->
+<div class="wrapper">
+<div class="container no-print">
+<select id="payment">
+<option>Cash</option>
+<option>UPI</option>
+</select>
+<button onclick="downloadPDF()">Download PDF</button>
+</div>
+</div>
+
+<script>
+let items=[];
+
+/* DEFAULT INVOICE NO */
+const defaultInvoiceNo =
+ "RDB-"+new Date().toLocaleDateString().replaceAll("/","")+"-001";
+
+invoiceNo.innerText = defaultInvoiceNo;
+invoiceNoInput.value = defaultInvoiceNo;
+
+/* Sync editable invoice number */
+invoiceNoInput.oninput = () => {
+  invoiceNo.innerText = invoiceNoInput.value || defaultInvoiceNo;
+};
+
+// Date time
+const now=new Date();
+invoiceDate.value=now.toISOString().slice(0,16);
+printDate.innerText=now.toLocaleString();
+invoiceDate.onchange=()=>{
+ printDate.innerText=new Date(invoiceDate.value).toLocaleString();
+};
+
+// Mobile validation
+custMobile.oninput=()=>{
+ custMobile.value=custMobile.value.replace(/\D/g,'');
+ custMobilePrint.innerText=custMobile.value||"-";
+};
+
+// Payment
+payment.onchange=()=>paymentPrint.innerText=payment.value;
+
+// Add item
+function addItem(){
+ if(!item.value) return;
+ const q=Number(qty.value);
+ const r=Number(rate.value);
+ const d=Number(disc.value);
+ const base=q*r;
+ const final=base-(base*d/100);
+
+ items.push({
+  name:item.value,
+  qty:q,
+  rate:r,
+  disc:d,
+  amt:final
+ });
+
+ item.value="";
+ rate.value="";
+ qty.value=1;
+ disc.value=0;
+ render();
+}
+
+// Render items
+function render(){
+ let html="",sub=0;
+ items.forEach(i=>{
+  sub+=i.amt;
+  html+=`
+  <tr>
+   <td class="col-item">${i.name}</td>
+   <td class="col-qty">${i.qty}</td>
+   <td class="col-rate">${i.rate}</td>
+   <td class="col-disc">${i.disc}</td>
+   <td class="col-amt">${i.amt.toFixed(2)}</td>
+  </tr>`;
+ });
+ itemTable.innerHTML=html;
+ subTotal.innerText=sub.toFixed(2);
+
+ if(gstType.value==="gst"){
+  cgstRow.style.display="";
+  sgstRow.style.display="";
+  cgst.innerText=(sub*0.025).toFixed(2);
+  sgst.innerText=(sub*0.025).toFixed(2);
+  grandTotal.innerText=(sub*1.05).toFixed(2);
+ }else{
+  cgstRow.style.display="none";
+  sgstRow.style.display="none";
+  grandTotal.innerText=sub.toFixed(2);
+ }
+}
+
+// PDF
+async function downloadPDF(){
+ if(custMobile.value && custMobile.value.length!==10){
+  alert("Please enter a valid 10-digit mobile number");
+  return;
+ }
+ document.querySelectorAll(".no-print").forEach(e=>e.style.display="none");
+ const {jsPDF}=window.jspdf;
+ const pdf=new jsPDF({unit:"mm",format:[80,280]});
+ const canvas=await html2canvas(invoice,{scale:2});
+ const h=canvas.height*80/canvas.width;
+ pdf.addImage(canvas.toDataURL("image/png"),"PNG",0,0,80,h);
+ pdf.save(invoiceNo.innerText+".pdf");
+ document.querySelectorAll(".no-print").forEach(e=>e.style.display="block");
+}
+</script>
+
+</body>
+</html>
